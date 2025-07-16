@@ -33,3 +33,6 @@ cargo run
 ```
 ### 4. Log and Output
 The log and output files saved in the project directory `sage.log` and `analysis.csv`
+
+## Limitations
+ - Reported loaded with `mismatch_tpa_cvev5`as `Yes`, when the loaded CVE JSON contains only `other` block on cna.metrics. 

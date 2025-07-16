@@ -27,7 +27,7 @@ pub async fn cve_analysis(tpa_baseUrl: &str, tpa_access_token: &str) -> Result<(
         .quote_style(QuoteStyle::Always)
         .from_path("analysis.csv")?;
     for sev in severity {
-        let tpa_response = fetch_tpa_data(tpa_baseUrl, sev,limiter, tpa_access_token).await?;
+        let tpa_response = fetch_tpa_data(tpa_baseUrl, sev, limiter, tpa_access_token).await?;
         for item in tpa_response.items {
             let mut cna_summary = "".to_string();
             let mut adp_summary = "".to_string();
@@ -37,34 +37,40 @@ pub async fn cve_analysis(tpa_baseUrl: &str, tpa_access_token: &str) -> Result<(
             let tpa_severity = item.average_severity;
             let tpa_score = item.average_score;
             let tpa_advisories = item.advisories;
-            if let Some(tpa_score) = tpa_score{
-            let diff_score = tpa_advisories
-                .iter()
-                .any(|adv| adv.score.map_or(false, |s| s != tpa_score));
-                        let (cve_basescore, cve_data) = retrieve_cve_basescore(&cve_id).await;
-            if let Some(basescore) = cve_basescore {
-                if tpa_score != basescore {
-                    cve_diff = "Yes".to_string();
-                }
-                if let Some(cve_cna_content) = cve_data.containers.cna.metrics {
-                    cna_summary = format_cvss(cve_cna_content).await;
-                }
-                if let Some(cna_adp_container) = cve_data.containers.adp {
-                    for adp_content in cna_adp_container {
-                        if let Some(adp) = adp_content.metrics {
-                            adp_summary = format_cvss(adp).await;
+            let mut diff_score = false;
+            if let Some(tpa_score) = tpa_score {
+                diff_score = tpa_advisories
+                    .iter()
+                    .any(|adv| adv.score.map_or(true, |s| s != tpa_score));
+                let (cve_basescore, cve_data) = retrieve_cve_basescore(&cve_id).await;
+                if let Some(basescore) = cve_basescore {
+                    if tpa_score != basescore {
+                        cve_diff = "Yes".to_string();
+                    }
+                    if let Some(cve_cna_content) = cve_data.containers.cna.metrics {
+                        cna_summary = format_cvss(cve_cna_content).await;
+                    }
+                    if let Some(cna_adp_container) = cve_data.containers.adp {
+                        for adp_content in cna_adp_container {
+                            if let Some(adp) = adp_content.metrics {
+                                adp_summary = format_cvss(adp).await;
+                            }
                         }
                     }
+                }else{
+                    cve_diff = "Yes".to_string();
                 }
-                if diff_score {
+            } else {
+                diff_score = true;
+            }
+            if diff_score {
                 adv_diff = "Yes".to_string();
             }
-            }}
             let adv_summary = tpa_advisories
                 .iter()
                 .map(|adv| {
                     format!(
-                        "{};{};{};{}",
+                        "{}:{}:{}:{}",
                         adv.labels.adv_type,
                         adv.identifier,
                         adv.score
@@ -75,7 +81,7 @@ pub async fn cve_analysis(tpa_baseUrl: &str, tpa_access_token: &str) -> Result<(
                 })
                 .collect::<Vec<_>>()
                 .join(" | ");
-            
+
             let _ = wrt_ref.serialize(ReportHeader {
                 cve_id: cve_id.to_string(),
                 tpa_score: tpa_score.unwrap_or_else(|| 0.0).to_string(),
@@ -142,15 +148,15 @@ pub async fn format_cvss(metric_wrapper: Vec<Option<MetricsWrapper>>) -> String 
         .flatten()
         .filter_map(|metric| match metric {
             MetricsWrapper::CvssV4_0 { cvssV4_0 } => Some(format!(
-                "V4.0;{};{}",
+                "V4.0:{}:{}",
                 cvssV4_0.baseScore, cvssV4_0.baseSeverity
             )),
             MetricsWrapper::CvssV3_1 { cvssV3_1 } => Some(format!(
-                "V3.1;{};{}",
+                "V3.1:{}:{}",
                 cvssV3_1.baseScore, cvssV3_1.baseSeverity
             )),
             MetricsWrapper::CvssV3_0 { cvssV3_0 } => Some(format!(
-                "V3.0;{};{}",
+                "V3.0:{}:{}",
                 cvssV3_0.baseScore, cvssV3_0.baseSeverity
             )),
             MetricsWrapper::CvssV2_0 { .. } => None,
